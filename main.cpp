@@ -45,10 +45,63 @@ void runDemo(){
 }
 void runSelfTest(){
     TextPreprocessor p;
+
+    // Preprocessing: stop words removed and simple stemming applied.
     const auto tokens=p.tokenize("The black leather wallets are running");
-    if(tokens.size()!=4) throw std::runtime_error("Preprocessor test failed");
-    const double similarity=SimilarityEngine::cosineSimilarity({1.0,0.0},{1.0,0.0});
-    if(std::abs(similarity-1.0)>1e-9) throw std::runtime_error("Cosine similarity test failed");
+    if(tokens.size()!=4 || tokens[0]!="black" || tokens[2]!="wallet" || tokens[3]!="runn")
+        throw std::runtime_error("Preprocessor test failed");
+
+    // Cosine similarity: identical, orthogonal and zero vectors.
+    if(std::abs(SimilarityEngine::cosineSimilarity({1.0,0.0},{1.0,0.0})-1.0)>1e-9)
+        throw std::runtime_error("Identical-vector cosine test failed");
+
+    if(std::abs(SimilarityEngine::cosineSimilarity({1.0,0.0},{0.0,1.0}))>1e-9)
+        throw std::runtime_error("Orthogonal-vector cosine test failed");
+
+    if(std::abs(SimilarityEngine::cosineSimilarity({0.0,0.0},{1.0,0.0}))>1e-9)
+        throw std::runtime_error("Zero-vector cosine test failed");
+
+    // TF-IDF should produce a non-empty vocabulary and comparable vectors.
+    TfidfVectorizer vectorizer(p);
+    const auto vectors=vectorizer.fitTransform({
+        "black leather wallet",
+        "dark leather wallet",
+        "blue water bottle"
+    });
+
+    if(vectorizer.vocabularySize()==0 || vectors.size()!=3)
+        throw std::runtime_error("TF-IDF construction test failed");
+
+    if(SimilarityEngine::cosineSimilarity(vectors[0],vectors[1]) <=
+       SimilarityEngine::cosineSimilarity(vectors[0],vectors[2]))
+        throw std::runtime_error("TF-IDF similarity ranking test failed");
+
+    // Match engine should prefer the semantically similar found item.
+    const Item lost{
+        1, ItemType::LOST, "Wallet", "wallet",
+        "black leather wallet with student card",
+        "central library", "2026-10-05", ItemStatus::ACTIVE
+    };
+
+    const std::vector<Item> candidates{
+        {2, ItemType::FOUND, "Black wallet", "wallet",
+         "dark leather wallet with student card",
+         "central library", "2026-10-05", ItemStatus::ACTIVE},
+        {3, ItemType::FOUND, "Bottle", "bottle",
+         "blue steel water bottle",
+         "sports complex", "2026-10-04", ItemStatus::ACTIVE},
+        {4, ItemType::LOST, "Wallet", "wallet",
+         "another wallet", "central library", "2026-10-05", ItemStatus::ACTIVE},
+        {5, ItemType::FOUND, "Old wallet", "wallet",
+         "old leather wallet", "central library", "2026-10-05", ItemStatus::RETURNED}
+    };
+
+    const MatchEngine matcher(p);
+    const auto matches=matcher.findMatches(lost,candidates);
+
+    if(matches.size()!=2 || matches.front().item.id!=2)
+        throw std::runtime_error("Match ranking/filtering test failed");
+
     std::cout<<"All self-tests passed.\n";
 }
 }
