@@ -1,0 +1,9 @@
+findback
+*.o
+*.obj
+build/
+cmake-build-*/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
